@@ -165,15 +165,20 @@ async def test_concurrent_faults_same_vehicle_single_maintenance(patch_db_engine
             transport=ASGITransport(app=app), base_url="http://test"
         ) as ac:
             resp = await ac.post("/telemetry", json=_fault_event(vehicle_id))
-            # Under concurrent load the first fault commits; subsequent faults
-            # may see the vehicle already in "fault" state and still create a
-            # maintenance record unless SELECT FOR UPDATE serializes them.
-            # We accept 200 or 500 here — what matters is the record count.
             return resp.status_code
 
     # Fire all concurrent fault requests
     statuses = await asyncio.gather(
         *[post_fault(i) for i in range(n_concurrent_faults)]
+    )
+
+    # All requests must return 200: SELECT FOR UPDATE serializes same-vehicle faults so
+    # each transaction either creates the maintenance record (first) or sees pre_fault_status
+    # == "fault" and skips _handle_fault_transition — both paths succeed cleanly.
+    # Accepting 500 here would mask unhandled exceptions (e.g. NoResultFound) as correct
+    # behavior (WR-04).
+    assert all(s == 200 for s in statuses), (
+        f"All concurrent fault requests must return 200; got: {statuses}"
     )
 
     # Verify exactly ONE maintenance record was created (Pitfall 5 prevention)
