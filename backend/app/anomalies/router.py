@@ -19,12 +19,13 @@ async def get_anomalies(
     limit: int = Query(500, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
-    stmt = select(Anomaly).order_by(Anomaly.timestamp.desc()).limit(limit).offset(offset)
+    stmt = select(Anomaly).order_by(Anomaly.timestamp.desc())
     if vehicle_id:
         stmt = stmt.where(Anomaly.vehicle_id == vehicle_id)
     if from_time:
         stmt = stmt.where(Anomaly.timestamp >= from_time)
     if to_time:
         stmt = stmt.where(Anomaly.timestamp <= to_time)
+    stmt = stmt.limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.scalars().all()
