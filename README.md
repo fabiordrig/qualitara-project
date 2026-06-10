@@ -8,8 +8,8 @@ Real-time dashboard for 50 autonomous industrial vehicles — concurrent telemet
 # 1. Clone and enter the repo
 git clone <repo-url> && cd qualitara-project
 
-# 2. Set up Python backend
-python -m venv .venv && source .venv/bin/activate
+# 2. Set up Python backend (venv inside backend/)
+python -m venv backend/.venv && source backend/.venv/bin/activate
 pip install -r backend/requirements.txt
 
 # 3. Set up frontend
@@ -51,7 +51,7 @@ Copy `backend/.env.example` to `backend/.env` and replace `user` and `password` 
 | `make dev` | Start backend on :8000 and frontend on :3000 concurrently |
 | `make migrate` | Run Alembic migrations (`alembic upgrade head`) |
 | `make seed` | Seed 50 vehicles (v-1..v-50) and 20 zones — runs automatically on startup |
-| `make format` | Format backend (black) and frontend (prettier) |
+| `make format` | Format backend (ruff format) and frontend (eslint --fix) |
 | `make lint` | Lint backend (ruff) and frontend (eslint) |
 | `make test` | Run backend pytest suite |
 

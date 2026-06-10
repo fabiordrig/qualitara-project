@@ -27,7 +27,7 @@ class Mission(Base):
         String, nullable=False, default="active"
     )  # active/cancelled/completed
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True), nullable=False, server_default="now()"
     )
     cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
