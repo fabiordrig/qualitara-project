@@ -13,7 +13,7 @@ class VehicleStatus(str, Enum):
 
 
 class TelemetryEventCreate(BaseModel):
-    vehicle_id: str
+    vehicle_id: str = Field(min_length=1, max_length=64)
     timestamp: datetime
     lat: float
     lon: float
@@ -21,7 +21,7 @@ class TelemetryEventCreate(BaseModel):
     speed_mps: float = Field(ge=0)
     status: VehicleStatus
     error_codes: list[str] = []
-    zone_entered: Optional[str] = None
+    zone_entered: Optional[str] = Field(None, min_length=1, max_length=64)
 
 
 class TelemetryEventResponse(BaseModel):
