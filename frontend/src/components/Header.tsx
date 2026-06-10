@@ -18,7 +18,12 @@ export function Header({ fleetState, dataUpdatedAt }: HeaderProps) {
     return () => clearInterval(interval)
   }, [dataUpdatedAt])
 
-  const lastUpdatedLabel = secondsAgo < 2 ? 'LIVE' : `${secondsAgo}s`
+  const lastUpdatedLabel =
+    dataUpdatedAt === 0
+      ? '—'
+      : secondsAgo < 2
+      ? 'LIVE'
+      : `${secondsAgo}s`
 
   return (
     <header style={{
