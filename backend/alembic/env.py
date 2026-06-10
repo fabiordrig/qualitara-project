@@ -20,10 +20,15 @@ from app.database import Base
 # access to the values within the .ini file in use.
 config = context.config
 
-# Override sqlalchemy.url from DATABASE_URL env var — never hardcode credentials
+# Require DATABASE_URL env var — fail loudly if absent rather than silently
+# falling back to any placeholder value in alembic.ini (CR-03).
 database_url = os.environ.get("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+if not database_url:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required. "
+        "Set it before running alembic commands."
+    )
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
