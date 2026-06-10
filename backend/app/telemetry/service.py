@@ -56,15 +56,29 @@ async def ingest_telemetry(
 ) -> TelemetryEventResponse:
     """Ingest a single telemetry event atomically.
 
-    All five operations run inside ONE session.begin() block — atomic commit or full rollback:
-    1. INSERT TelemetryEvent + flush to get auto-generated id (TELE-01)
-    2. Anomaly detection + INSERT Anomaly row if detected (ANOM-01)
-    3. Atomic zone counter increment via single-statement UPDATE (ZONE-01, Pattern 3)
-    4. UPDATE vehicle denormalized state (D-01)
-    5. Fault transition with SELECT FOR UPDATE row-lock (FAULT-01, FAULT-02, Pattern 4)
+    All operations run inside ONE session.begin() block — atomic commit or full rollback:
+    1. If status=fault: SELECT FOR UPDATE on vehicle to acquire row lock and read
+       committed pre-update status (FAULT-01, FAULT-02). Must happen BEFORE the
+       vehicle UPDATE so the lock is acquired while the committed status is still
+       the pre-fault state; this lets the idempotency check in step 5 see the true
+       "was it already fault?" answer based on committed data.
+    2. INSERT TelemetryEvent + flush to get auto-generated id (TELE-01)
+    3. Anomaly detection + INSERT Anomaly row if detected (ANOM-01)
+    4. Atomic zone counter increment via single-statement UPDATE (ZONE-01, Pattern 3)
+    5. UPDATE vehicle denormalized state (D-01)
+    6. Fault transition — cancel mission + create maintenance record — only if vehicle
+       was NOT already in fault status at lock-acquire time (FAULT-01, FAULT-02, FAULT-03)
     """
     async with session.begin():
-        # 1. Insert telemetry event
+        # 1. For fault events: row-lock the vehicle FIRST to read committed status
+        #    before this transaction's UPDATE changes it. This is the SELECT FOR UPDATE
+        #    that serializes concurrent fault events for the same vehicle (FAULT-02).
+        #    Different vehicles lock different rows — no table-level serialization.
+        pre_fault_status: str | None = None
+        if event.status == "fault":
+            pre_fault_status = await _lock_vehicle_and_read_status(session, event.vehicle_id)
+
+        # 2. Insert telemetry event
         telemetry_row = TelemetryEvent(
             vehicle_id=event.vehicle_id,
             timestamp=event.timestamp,
@@ -79,7 +93,7 @@ async def ingest_telemetry(
         session.add(telemetry_row)
         await session.flush()  # populates telemetry_row.id before commit
 
-        # 2. Anomaly detection
+        # 3. Anomaly detection
         anomaly_detected = detect_anomaly(event)
         if anomaly_detected:
             session.add(Anomaly(
@@ -89,7 +103,7 @@ async def ingest_telemetry(
                 raw_event_id=telemetry_row.id,
             ))
 
-        # 3. Atomic zone counter increment (Pattern 3 — no SELECT needed)
+        # 4. Atomic zone counter increment (Pattern 3 — no SELECT needed)
         if event.zone_entered:
             await session.execute(
                 update(Zone)
@@ -97,7 +111,7 @@ async def ingest_telemetry(
                 .values(entry_count=Zone.entry_count + 1)
             )
 
-        # 4. Update vehicle denormalized state (D-01)
+        # 5. Update vehicle denormalized state (D-01)
         await session.execute(
             update(Vehicle)
             .where(Vehicle.vehicle_id == event.vehicle_id)
@@ -108,8 +122,9 @@ async def ingest_telemetry(
             )
         )
 
-        # 5. Fault transition (Pattern 4 — SELECT FOR UPDATE)
-        if event.status == "fault":
+        # 6. Fault transition — only if vehicle was NOT already in fault status
+        #    at lock-acquire time (idempotency guard, FAULT-02, Pitfall 5)
+        if event.status == "fault" and pre_fault_status != "fault":
             await _handle_fault_transition(session, event.vehicle_id)
 
     return TelemetryEventResponse(
@@ -118,24 +133,39 @@ async def ingest_telemetry(
     )
 
 
-async def _handle_fault_transition(session: AsyncSession, vehicle_id: str) -> None:
-    """Handle fault transition inside the caller's transaction.
+async def _lock_vehicle_and_read_status(session: AsyncSession, vehicle_id: str) -> str:
+    """Acquire a row lock on the vehicle and return its committed current_status.
 
-    Uses SELECT FOR UPDATE to row-lock the vehicle row, preventing concurrent fault
-    events for the same vehicle from both inserting a maintenance record (Pitfall 5,
-    FAULT-02). Different vehicles use different row locks — no table-level serialization.
+    Called at the START of a fault-event ingest, BEFORE the vehicle UPDATE.
+    This ensures the SELECT FOR UPDATE captures the committed state (not the
+    in-transaction state after this transaction's own UPDATE modifies it).
 
-    - Cancels the active mission if one exists (FAULT-03: no-op if none)
-    - Always creates a MaintenanceRecord (FAULT-01)
+    The row lock prevents two concurrent fault transactions for the SAME vehicle
+    from both proceeding past this point simultaneously (Pitfall 5, FAULT-02).
+    Different vehicle_ids lock different rows — no table-level serialization.
+
+    Returns:
+        The committed current_status value (e.g. "idle", "fault", "moving").
+        Callers use this to decide whether the fault transition is needed.
     """
-    # Row-lock prevents concurrent fault for same vehicle (FAULT-01, FAULT-02)
     result = await session.execute(
         select(Vehicle)
         .where(Vehicle.vehicle_id == vehicle_id)
         .with_for_update()
     )
-    result.scalar_one()  # raises if vehicle missing — fail fast
+    vehicle = result.scalar_one()  # raises NoResultFound if vehicle missing — fail fast
+    return vehicle.current_status
 
+
+async def _handle_fault_transition(session: AsyncSession, vehicle_id: str) -> None:
+    """Handle fault transition inside the caller's transaction.
+
+    Called only when the vehicle was NOT already in 'fault' status at lock-acquire
+    time (the idempotency guard in ingest_telemetry step 6).
+
+    - Cancels the active mission if one exists (FAULT-03: no-op if none)
+    - Always creates a MaintenanceRecord for this fault transition (FAULT-01)
+    """
     # Cancel active mission — no-op if none (FAULT-03)
     await session.execute(
         update(Mission)
@@ -143,5 +173,5 @@ async def _handle_fault_transition(session: AsyncSession, vehicle_id: str) -> No
         .values(status="cancelled", cancelled_at=func.now())
     )
 
-    # Always create maintenance record
+    # Create maintenance record
     session.add(MaintenanceRecord(vehicle_id=vehicle_id))
