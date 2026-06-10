@@ -211,3 +211,42 @@ async def test_post_telemetry_zone_increments_count(client: AsyncClient):
     assert zones_after[zone_id] == baseline + 1, (
         f"Expected zone {zone_id} entry_count={baseline + 1}, got {zones_after[zone_id]}"
     )
+
+
+@pytest.mark.asyncio
+async def test_multi_condition_anomaly_type_persisted_as_fault_status(client: AsyncClient):
+    """
+    WR-03: For an event with BOTH low battery AND fault status, the persisted
+    anomaly_type must be 'fault_status' (not 'low_battery').
+
+    detect_anomaly trips on low_battery first (rule 1) and returns True.
+    _anomaly_type evaluates fault_status first (its own rule 1) and returns 'fault_status'.
+    This test verifies the stored DB label matches the intent of _anomaly_type,
+    guarding against a future developer changing one function without the other.
+    """
+    import app.database as _db_module
+    from sqlalchemy import select
+    from app.anomalies.models import Anomaly
+
+    payload = _base_event(
+        vehicle_id="v-4",
+        battery_pct=10.0,   # triggers low_battery (detect_anomaly rule 1)
+        status="fault",     # triggers fault_status (_anomaly_type rule 1)
+    )
+    response = await client.post("/telemetry", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["anomaly_detected"] is True, "Multi-condition event must be detected as anomaly"
+
+    # Verify the persisted anomaly_type label is 'fault_status', not 'low_battery'
+    async with _db_module.async_session_maker() as session:
+        result = await session.execute(
+            select(Anomaly)
+            .where(Anomaly.raw_event_id == body["event_id"])
+        )
+        anomaly = result.scalar_one()
+        assert anomaly.anomaly_type == "fault_status", (
+            f"Expected anomaly_type='fault_status' for battery_pct=10 + status=fault, "
+            f"got '{anomaly.anomaly_type}'. "
+            f"_anomaly_type precedence (fault_status first) must match persisted label (WR-03)."
+        )
