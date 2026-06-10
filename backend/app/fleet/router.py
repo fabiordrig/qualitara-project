@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from sqlalchemy import select, func
 from app.database import DB
 from app.fleet.models import Vehicle
+from app.fleet.schemas import VehicleResponse
 
 router = APIRouter()
 
@@ -15,3 +16,9 @@ async def get_fleet_state(db: DB):
     )
     rows = result.all()
     return [{"status": row.current_status, "count": row.count} for row in rows]
+
+
+@router.get("/vehicles", response_model=list[VehicleResponse])
+async def get_vehicles(db: DB):
+    result = await db.execute(select(Vehicle).order_by(Vehicle.vehicle_id))
+    return result.scalars().all()
