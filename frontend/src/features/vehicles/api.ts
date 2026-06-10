@@ -1,7 +1,5 @@
-import axios from 'axios'
 import type { VehicleRow, AnomalyRecord, FleetStateItem } from './types'
-
-const api = axios.create({ baseURL: 'http://localhost:8000' })
+import { apiClient as api } from '@/lib/apiClient'
 
 export async function fetchVehicles(): Promise<VehicleRow[]> {
   const response = await api.get<VehicleRow[]>('/vehicles')
