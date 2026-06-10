@@ -16,8 +16,10 @@ async def get_anomalies(
     vehicle_id: Optional[str] = Query(None),
     from_time: Optional[datetime] = Query(None, alias="from"),
     to_time: Optional[datetime] = Query(None, alias="to"),
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ):
-    stmt = select(Anomaly).order_by(Anomaly.timestamp.desc())
+    stmt = select(Anomaly).order_by(Anomaly.timestamp.desc()).limit(limit).offset(offset)
     if vehicle_id:
         stmt = stmt.where(Anomaly.vehicle_id == vehicle_id)
     if from_time:
