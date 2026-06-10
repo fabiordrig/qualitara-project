@@ -16,5 +16,5 @@ class TelemetryEvent(Base):
     battery_pct: Mapped[float] = mapped_column(Float, nullable=False)
     speed_mps: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
-    error_codes: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    error_codes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     zone_entered: Mapped[str | None] = mapped_column(String, nullable=True)
