@@ -3,12 +3,12 @@ from fastapi import APIRouter
 from sqlalchemy import select, func
 from app.database import DB
 from app.fleet.models import Vehicle
-from app.fleet.schemas import VehicleResponse
+from app.fleet.schemas import VehicleResponse, FleetStateResponse
 
 router = APIRouter()
 
 
-@router.get("/fleet/state")
+@router.get("/fleet/state", response_model=list[FleetStateResponse])
 async def get_fleet_state(db: DB):
     result = await db.execute(
         select(Vehicle.current_status, func.count(Vehicle.vehicle_id).label("count"))
