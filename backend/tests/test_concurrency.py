@@ -30,6 +30,7 @@ Design notes:
   50 concurrent requests → 50 simultaneous connections, well within PostgreSQL's
   default max_connections of 100.
 """
+
 import asyncio
 import pytest
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ from sqlalchemy import select
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _normal_event(vehicle_id: str, zone_entered: str | None = None) -> dict:
     """Build a normal (non-fault) telemetry event payload."""
@@ -78,6 +80,7 @@ def _fault_event(vehicle_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Test 1: 50-way concurrent zone increment — no lost updates
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_concurrent_zone_increments_no_lost_updates(patch_db_engine):
@@ -122,9 +125,7 @@ async def test_concurrent_zone_increments_no_lost_updates(patch_db_engine):
 
     # Zone entry_count must be exactly 50 — no lost updates
     async with _db_module.async_session_maker() as session:
-        result = await session.execute(
-            select(Zone).where(Zone.zone_id == target_zone)
-        )
+        result = await session.execute(select(Zone).where(Zone.zone_id == target_zone))
         zone = result.scalar_one()
         assert zone.entry_count == n_requests, (
             f"Expected zone '{target_zone}' entry_count={n_requests} after {n_requests} "
@@ -135,6 +136,7 @@ async def test_concurrent_zone_increments_no_lost_updates(patch_db_engine):
 # ---------------------------------------------------------------------------
 # Test 2: Concurrent fault events — same vehicle → single maintenance record
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_concurrent_faults_same_vehicle_single_maintenance(patch_db_engine):
@@ -154,11 +156,13 @@ async def test_concurrent_faults_same_vehicle_single_maintenance(patch_db_engine
     # Seed an active mission for the vehicle
     async with _db_module.async_session_maker() as session:
         async with session.begin():
-            session.add(Mission(
-                vehicle_id=vehicle_id,
-                status="active",
-                created_at=datetime.now(timezone.utc),
-            ))
+            session.add(
+                Mission(
+                    vehicle_id=vehicle_id,
+                    status="active",
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
 
     async def post_fault(i: int) -> int:
         async with AsyncClient(
@@ -196,7 +200,9 @@ async def test_concurrent_faults_same_vehicle_single_maintenance(patch_db_engine
     # Verify the mission was cancelled (not left active)
     async with _db_module.async_session_maker() as session:
         mission_result = await session.execute(
-            select(Mission).where(Mission.vehicle_id == vehicle_id, Mission.status == "active")
+            select(Mission).where(
+                Mission.vehicle_id == vehicle_id, Mission.status == "active"
+            )
         )
         active_missions = mission_result.scalars().all()
         assert len(active_missions) == 0, (
@@ -208,6 +214,7 @@ async def test_concurrent_faults_same_vehicle_single_maintenance(patch_db_engine
 # ---------------------------------------------------------------------------
 # Test 3: Concurrent faults — different vehicles → row-level isolation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_concurrent_faults_different_vehicles_isolated(patch_db_engine):
@@ -248,7 +255,9 @@ async def test_concurrent_faults_different_vehicles_isolated(patch_db_engine):
     async with _db_module.async_session_maker() as session:
         for vehicle_id in vehicle_ids:
             result = await session.execute(
-                select(MaintenanceRecord).where(MaintenanceRecord.vehicle_id == vehicle_id)
+                select(MaintenanceRecord).where(
+                    MaintenanceRecord.vehicle_id == vehicle_id
+                )
             )
             records = result.scalars().all()
             assert len(records) == 1, (

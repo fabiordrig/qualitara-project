@@ -11,7 +11,9 @@ class Vehicle(Base):
     vehicle_id: Mapped[str] = mapped_column(String, primary_key=True)
     current_status: Mapped[str] = mapped_column(String, nullable=False, default="idle")
     current_battery: Mapped[float] = mapped_column(Float, nullable=False, default=100.0)
-    latest_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    latest_seen: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Mission(Base):
@@ -21,9 +23,15 @@ class Mission(Base):
     vehicle_id: Mapped[str] = mapped_column(
         String, ForeignKey("vehicles.vehicle_id"), nullable=False, index=True
     )
-    status: Mapped[str] = mapped_column(String, nullable=False, default="active")  # active/cancelled/completed
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default="active"
+    )  # active/cancelled/completed
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class MaintenanceRecord(Base):
@@ -33,4 +41,6 @@ class MaintenanceRecord(Base):
     vehicle_id: Mapped[str] = mapped_column(
         String, ForeignKey("vehicles.vehicle_id"), nullable=False, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()"
+    )

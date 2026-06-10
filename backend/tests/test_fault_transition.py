@@ -9,13 +9,14 @@ Covers:
 
 These tests require DB access and a properly seeded vehicle with/without an active mission.
 """
+
 import pytest
 from datetime import datetime, timezone
 from httpx import AsyncClient
 
 import app.database as _db_module
 from app.fleet.models import Mission, MaintenanceRecord
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 
 def _fault_event(vehicle_id: str) -> dict:
@@ -34,7 +35,9 @@ def _fault_event(vehicle_id: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_fault_with_active_mission_cancels_and_creates_maintenance(client: AsyncClient):
+async def test_fault_with_active_mission_cancels_and_creates_maintenance(
+    client: AsyncClient,
+):
     """
     FAULT-01: POST a fault event for a vehicle that has an active mission.
     Assert both:
@@ -47,15 +50,19 @@ async def test_fault_with_active_mission_cancels_and_creates_maintenance(client:
     # Seed an active mission for this vehicle
     async with _db_module.async_session_maker() as session:
         async with session.begin():
-            session.add(Mission(
-                vehicle_id=vehicle_id,
-                status="active",
-                created_at=datetime.now(timezone.utc),
-            ))
+            session.add(
+                Mission(
+                    vehicle_id=vehicle_id,
+                    status="active",
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
 
     # POST a fault event
     response = await client.post("/telemetry", json=_fault_event(vehicle_id))
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text}"
+    )
 
     # Assert mission was cancelled
     async with _db_module.async_session_maker() as session:
@@ -79,7 +86,9 @@ async def test_fault_with_active_mission_cancels_and_creates_maintenance(client:
 
 
 @pytest.mark.asyncio
-async def test_fault_without_active_mission_creates_only_maintenance(client: AsyncClient):
+async def test_fault_without_active_mission_creates_only_maintenance(
+    client: AsyncClient,
+):
     """
     FAULT-03: POST a fault event for a vehicle with NO active mission.
     Assert:
@@ -91,13 +100,19 @@ async def test_fault_without_active_mission_creates_only_maintenance(client: Asy
     # Verify vehicle has no missions
     async with _db_module.async_session_maker() as session:
         result = await session.execute(
-            select(Mission).where(Mission.vehicle_id == vehicle_id, Mission.status == "active")
+            select(Mission).where(
+                Mission.vehicle_id == vehicle_id, Mission.status == "active"
+            )
         )
-        assert result.scalars().first() is None, "Precondition: no active mission for v-11"
+        assert result.scalars().first() is None, (
+            "Precondition: no active mission for v-11"
+        )
 
     # POST a fault event — must not error
     response = await client.post("/telemetry", json=_fault_event(vehicle_id))
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text}"
+    )
 
     # Assert exactly one maintenance record was created
     async with _db_module.async_session_maker() as session:

@@ -10,16 +10,12 @@ Covers:
 - Idempotent seeding (no duplicates on repeated seed calls)
 - Fleet state counts per vehicle, not per event (FLEET-02, Pitfall 6)
 """
+
 import pytest
-import pytest_asyncio
-from datetime import datetime, timezone
 from httpx import AsyncClient
 
 import app.database as _db_module
 from app.seeds import seed_zones, seed_vehicles
-from app.zones.models import Zone
-from app.fleet.models import Vehicle
-from app.telemetry.models import TelemetryEvent
 
 
 @pytest.mark.asyncio
@@ -72,7 +68,9 @@ async def test_fleet_state_counts_vehicles_not_events(client: AsyncClient):
 
     # At seeding time all vehicles are 'idle' — fleet state must reflect vehicle table
     statuses = {row["status"]: row["count"] for row in fleet}
-    assert "idle" in statuses, f"Expected 'idle' status group in fleet state; got: {statuses}"
+    assert "idle" in statuses, (
+        f"Expected 'idle' status group in fleet state; got: {statuses}"
+    )
     assert statuses["idle"] == 50, (
         f"Expected 50 idle vehicles at seed time, got {statuses['idle']}"
     )

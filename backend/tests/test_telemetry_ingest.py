@@ -11,6 +11,7 @@ Covers:
 - POST /telemetry happy-path: persists row, returns {event_id, anomaly_detected}
 - zone_entered ingest: increments zone's entry_count by exactly 1
 """
+
 import pytest
 from datetime import datetime, timezone
 from httpx import AsyncClient
@@ -19,6 +20,7 @@ from httpx import AsyncClient
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _base_event(**overrides):
     """Build a minimal valid raw dict for TelemetryEventCreate."""
@@ -41,12 +43,14 @@ def _base_event(**overrides):
 # detect_anomaly pure-function tests
 # ---------------------------------------------------------------------------
 
+
 class TestDetectAnomaly:
     """Pure unit tests — no DB required, import the function directly."""
 
     def _import(self):
         from app.telemetry.service import detect_anomaly, _anomaly_type
         from app.telemetry.schemas import TelemetryEventCreate
+
         return detect_anomaly, _anomaly_type, TelemetryEventCreate
 
     def test_low_battery_is_anomaly(self):
@@ -76,12 +80,14 @@ class TestDetectAnomaly:
 
     def test_normal_event_is_not_anomaly(self):
         detect_anomaly, _, TelemetryEventCreate = self._import()
-        event = TelemetryEventCreate(**_base_event(
-            battery_pct=50.0,
-            speed_mps=2.0,
-            status="idle",
-            error_codes=[],
-        ))
+        event = TelemetryEventCreate(
+            **_base_event(
+                battery_pct=50.0,
+                speed_mps=2.0,
+                status="idle",
+                error_codes=[],
+            )
+        )
         assert detect_anomaly(event) is False
 
     def test_anomaly_type_fault_status_takes_precedence(self):
@@ -110,33 +116,39 @@ class TestDetectAnomaly:
 # TelemetryEventCreate Pydantic validation (422 cases)
 # ---------------------------------------------------------------------------
 
+
 class TestTelemetryEventCreateValidation:
     """Verify Pydantic v2 constraints produce ValidationError on bad input."""
 
     def _schema(self):
         from app.telemetry.schemas import TelemetryEventCreate
+
         return TelemetryEventCreate
 
     def test_battery_pct_over_100_raises(self):
         from pydantic import ValidationError
+
         TelemetryEventCreate = self._schema()
         with pytest.raises(ValidationError):
             TelemetryEventCreate(**_base_event(battery_pct=150))
 
     def test_speed_mps_negative_raises(self):
         from pydantic import ValidationError
+
         TelemetryEventCreate = self._schema()
         with pytest.raises(ValidationError):
             TelemetryEventCreate(**_base_event(speed_mps=-1))
 
     def test_invalid_status_raises(self):
         from pydantic import ValidationError
+
         TelemetryEventCreate = self._schema()
         with pytest.raises(ValidationError):
             TelemetryEventCreate(**_base_event(status="flying"))
 
     def test_missing_vehicle_id_raises(self):
         from pydantic import ValidationError
+
         TelemetryEventCreate = self._schema()
         data = _base_event()
         del data["vehicle_id"]
@@ -147,6 +159,7 @@ class TestTelemetryEventCreateValidation:
 # ---------------------------------------------------------------------------
 # POST /telemetry — integration tests (require DB + ASGI client)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_post_telemetry_happy_path(client: AsyncClient):
@@ -164,7 +177,9 @@ async def test_post_telemetry_happy_path(client: AsyncClient):
         zone_entered=None,
     )
     response = await client.post("/telemetry", json=payload)
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text}"
+    )
     body = response.json()
     assert set(body.keys()) == {"event_id", "anomaly_detected"}, (
         f"Response must have exactly event_id and anomaly_detected; got: {set(body.keys())}"
@@ -199,7 +214,10 @@ async def test_post_telemetry_zone_increments_count(client: AsyncClient):
     zone_id = "inbound_dock_a"
 
     # Read baseline
-    zones_before = {z["zone_id"]: z["entry_count"] for z in (await client.get("/zones/counts")).json()}
+    zones_before = {
+        z["zone_id"]: z["entry_count"]
+        for z in (await client.get("/zones/counts")).json()
+    }
     baseline = zones_before.get(zone_id, 0)
 
     payload = _base_event(vehicle_id="v-3", zone_entered=zone_id)
@@ -207,14 +225,19 @@ async def test_post_telemetry_zone_increments_count(client: AsyncClient):
     assert response.status_code == 200
 
     # Verify count incremented by exactly 1
-    zones_after = {z["zone_id"]: z["entry_count"] for z in (await client.get("/zones/counts")).json()}
+    zones_after = {
+        z["zone_id"]: z["entry_count"]
+        for z in (await client.get("/zones/counts")).json()
+    }
     assert zones_after[zone_id] == baseline + 1, (
         f"Expected zone {zone_id} entry_count={baseline + 1}, got {zones_after[zone_id]}"
     )
 
 
 @pytest.mark.asyncio
-async def test_multi_condition_anomaly_type_persisted_as_fault_status(client: AsyncClient):
+async def test_multi_condition_anomaly_type_persisted_as_fault_status(
+    client: AsyncClient,
+):
     """
     WR-03: For an event with BOTH low battery AND fault status, the persisted
     anomaly_type must be 'fault_status' (not 'low_battery').
@@ -230,19 +253,20 @@ async def test_multi_condition_anomaly_type_persisted_as_fault_status(client: As
 
     payload = _base_event(
         vehicle_id="v-4",
-        battery_pct=10.0,   # triggers low_battery (detect_anomaly rule 1)
-        status="fault",     # triggers fault_status (_anomaly_type rule 1)
+        battery_pct=10.0,  # triggers low_battery (detect_anomaly rule 1)
+        status="fault",  # triggers fault_status (_anomaly_type rule 1)
     )
     response = await client.post("/telemetry", json=payload)
     assert response.status_code == 200
     body = response.json()
-    assert body["anomaly_detected"] is True, "Multi-condition event must be detected as anomaly"
+    assert body["anomaly_detected"] is True, (
+        "Multi-condition event must be detected as anomaly"
+    )
 
     # Verify the persisted anomaly_type label is 'fault_status', not 'low_battery'
     async with _db_module.async_session_maker() as session:
         result = await session.execute(
-            select(Anomaly)
-            .where(Anomaly.raw_event_id == body["event_id"])
+            select(Anomaly).where(Anomaly.raw_event_id == body["event_id"])
         )
         anomaly = result.scalar_one()
         assert anomaly.anomaly_type == "fault_status", (

@@ -77,7 +77,7 @@ export function ZoneList({ zones, isLoading, isError }: ZoneListProps) {
               padding: '9px 16px',
               gap: '12px',
             }}>
-              <div className="skeleton-bar" style={{ height: '10px', width: `${50 + Math.random() * 30}%` }} />
+              <div className="skeleton-bar" style={{ height: '10px', width: `${50 + (i * 7) % 30}%` }} />
               <div className="skeleton-bar" style={{ height: '10px', width: '24px' }} />
             </div>
           ))}

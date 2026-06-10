@@ -12,6 +12,7 @@ Covers:
 Vehicles are created via the lifespan seeding (conftest.py client fixture).
 Telemetry updates are posted via the ASGI client to prove the full ingest→read path.
 """
+
 import pytest
 from datetime import datetime, timezone
 from httpx import AsyncClient
@@ -20,6 +21,7 @@ from httpx import AsyncClient
 # ---------------------------------------------------------------------------
 # Test 1: Returns all 50 seeded vehicles with correct shape
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_vehicles_returns_all_fifty(client: AsyncClient):
@@ -60,6 +62,7 @@ async def test_get_vehicles_returns_all_fifty(client: AsyncClient):
 # Test 2: Reflects live telemetry-driven state changes (DASH-01)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_vehicles_reflects_telemetry_update(client: AsyncClient):
     """
@@ -79,9 +82,7 @@ async def test_get_vehicles_reflects_telemetry_update(client: AsyncClient):
         "zone_entered": None,
     }
     ingest_resp = await client.post("/telemetry", json=event)
-    assert ingest_resp.status_code == 200, (
-        f"POST /telemetry failed: {ingest_resp.text}"
-    )
+    assert ingest_resp.status_code == 200, f"POST /telemetry failed: {ingest_resp.text}"
 
     response = await client.get("/vehicles")
     assert response.status_code == 200, response.text

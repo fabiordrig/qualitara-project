@@ -19,6 +19,7 @@ Database isolation strategy:
   Pure unit tests (TestDetectAnomaly, TestTelemetryEventCreateValidation) do not use
   DB and are unaffected by this truncation.
 """
+
 import os
 
 # Must set DATABASE_URL before any app module import — database.py reads it at load time
@@ -29,7 +30,6 @@ TEST_DATABASE_URL = os.environ.get(
 )
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
-import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import AsyncClient, ASGITransport  # noqa: E402
 from sqlalchemy import text  # noqa: E402
@@ -65,13 +65,17 @@ async def patch_db_engine():
     # Vehicle statuses are reset to 'idle'/100% battery so fleet-state tests pass
     # after fault or ingest tests have mutated vehicle rows.
     async with test_engine.connect() as conn:
-        await conn.execute(text(
-            "TRUNCATE TABLE anomalies, maintenance_records, missions, telemetry_events CASCADE"
-        ))
+        await conn.execute(
+            text(
+                "TRUNCATE TABLE anomalies, maintenance_records, missions, telemetry_events CASCADE"
+            )
+        )
         await conn.execute(text("UPDATE zones SET entry_count = 0"))
-        await conn.execute(text(
-            "UPDATE vehicles SET current_status = 'idle', current_battery = 100.0, latest_seen = NULL"
-        ))
+        await conn.execute(
+            text(
+                "UPDATE vehicles SET current_status = 'idle', current_battery = 100.0, latest_seen = NULL"
+            )
+        )
         await conn.commit()
 
     yield

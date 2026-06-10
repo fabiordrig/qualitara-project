@@ -92,7 +92,9 @@ async def ingest_telemetry(
         #    For non-fault events: assert vehicle exists to prevent orphaned rows (CR-01).
         pre_fault_status: str | None = None
         if event.status == "fault":
-            pre_fault_status = await _lock_vehicle_and_read_status(session, event.vehicle_id)
+            pre_fault_status = await _lock_vehicle_and_read_status(
+                session, event.vehicle_id
+            )
         else:
             await _assert_vehicle_exists(session, event.vehicle_id)
 
@@ -114,12 +116,14 @@ async def ingest_telemetry(
         # 3. Anomaly detection
         anomaly_detected = detect_anomaly(event)
         if anomaly_detected:
-            session.add(Anomaly(
-                vehicle_id=event.vehicle_id,
-                timestamp=event.timestamp,
-                anomaly_type=_anomaly_type(event),
-                raw_event_id=telemetry_row.id,
-            ))
+            session.add(
+                Anomaly(
+                    vehicle_id=event.vehicle_id,
+                    timestamp=event.timestamp,
+                    anomaly_type=_anomaly_type(event),
+                    raw_event_id=telemetry_row.id,
+                )
+            )
 
         # 4. Atomic zone counter increment (Pattern 3 — no SELECT needed)
         if event.zone_entered:
@@ -167,9 +171,7 @@ async def _lock_vehicle_and_read_status(session: AsyncSession, vehicle_id: str) 
         Callers use this to decide whether the fault transition is needed.
     """
     result = await session.execute(
-        select(Vehicle)
-        .where(Vehicle.vehicle_id == vehicle_id)
-        .with_for_update()
+        select(Vehicle).where(Vehicle.vehicle_id == vehicle_id).with_for_update()
     )
     try:
         vehicle = result.scalar_one()

@@ -24,9 +24,11 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Phase 2 React dev server; NOT wildcard (ASVS V14)
-    allow_credentials=False,   # no cookies/credentials are used
-    allow_methods=["GET"],     # dashboard is read-only
+    allow_origins=[
+        "http://localhost:3000"
+    ],  # Phase 2 React dev server; NOT wildcard (ASVS V14)
+    allow_credentials=False,  # no cookies/credentials are used
+    allow_methods=["GET"],  # dashboard is read-only
     allow_headers=["Content-Type"],
 )
 

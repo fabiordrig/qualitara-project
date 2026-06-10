@@ -15,6 +15,7 @@ proving the full ingest→query path through Plan 02's ingest_telemetry service.
 Scope: GET /anomalies read/filter contract only.
 Does NOT re-test: ingest atomicity, zone increments, fault-transition behavior (Plan 02).
 """
+
 import pytest
 from datetime import datetime, timezone, timedelta
 from httpx import AsyncClient
@@ -23,6 +24,7 @@ from httpx import AsyncClient
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _base_event(**overrides):
     """Build a minimal valid raw dict for POST /telemetry with no anomaly by default."""
@@ -50,6 +52,7 @@ def _fault_event(vehicle_id: str, **overrides):
 # vehicle_id filter
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_anomalies_filters_by_vehicle_id(client: AsyncClient):
     """
@@ -68,12 +71,15 @@ async def test_get_anomalies_filters_by_vehicle_id(client: AsyncClient):
             f"Expected vehicle_id='v-1' but got '{row['vehicle_id']}'"
         )
     vehicle_ids = {row["vehicle_id"] for row in rows}
-    assert "v-2" not in vehicle_ids, "v-2 anomalies must be excluded when filtering by v-1"
+    assert "v-2" not in vehicle_ids, (
+        "v-2 anomalies must be excluded when filtering by v-1"
+    )
 
 
 # ---------------------------------------------------------------------------
 # from/to time-range filter (inclusive bounds, public keys are `from`/`to`)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_anomalies_filters_by_time_range(client: AsyncClient):
@@ -88,15 +94,21 @@ async def test_get_anomalies_filters_by_time_range(client: AsyncClient):
     outside_ts = now - timedelta(hours=2)
 
     # Inside window
-    await client.post("/telemetry", json=_fault_event(
-        "v-3",
-        timestamp=inside_ts.isoformat(),
-    ))
+    await client.post(
+        "/telemetry",
+        json=_fault_event(
+            "v-3",
+            timestamp=inside_ts.isoformat(),
+        ),
+    )
     # Outside window
-    await client.post("/telemetry", json=_fault_event(
-        "v-4",
-        timestamp=outside_ts.isoformat(),
-    ))
+    await client.post(
+        "/telemetry",
+        json=_fault_event(
+            "v-4",
+            timestamp=outside_ts.isoformat(),
+        ),
+    )
 
     lo = (inside_ts - timedelta(minutes=5)).isoformat()
     hi = (inside_ts + timedelta(minutes=5)).isoformat()
@@ -107,13 +119,18 @@ async def test_get_anomalies_filters_by_time_range(client: AsyncClient):
 
     # Only v-3's anomaly falls inside the window
     returned_vehicles = {row["vehicle_id"] for row in rows}
-    assert "v-3" in returned_vehicles, "In-window anomaly for v-3 must appear in results"
-    assert "v-4" not in returned_vehicles, "Out-of-window anomaly for v-4 must be excluded"
+    assert "v-3" in returned_vehicles, (
+        "In-window anomaly for v-3 must appear in results"
+    )
+    assert "v-4" not in returned_vehicles, (
+        "Out-of-window anomaly for v-4 must be excluded"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Most-recent-first ordering
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_anomalies_orders_most_recent_first(client: AsyncClient):
@@ -143,6 +160,7 @@ async def test_get_anomalies_orders_most_recent_first(client: AsyncClient):
 # All four anomaly conditions surface (ROADMAP criterion 3)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_all_four_anomaly_conditions_surface(client: AsyncClient):
     """
@@ -157,31 +175,40 @@ async def test_all_four_anomaly_conditions_surface(client: AsyncClient):
     4. status=fault → fault_status
     """
     # 1. low_battery
-    await client.post("/telemetry", json=_base_event(
-        vehicle_id="v-10",
-        battery_pct=10.0,
-        status="idle",
-        speed_mps=2.0,
-        error_codes=[],
-    ))
+    await client.post(
+        "/telemetry",
+        json=_base_event(
+            vehicle_id="v-10",
+            battery_pct=10.0,
+            status="idle",
+            speed_mps=2.0,
+            error_codes=[],
+        ),
+    )
 
     # 2. speed_anomaly (speed > 8 & status != moving)
-    await client.post("/telemetry", json=_base_event(
-        vehicle_id="v-11",
-        speed_mps=9.0,
-        status="idle",
-        battery_pct=50.0,
-        error_codes=[],
-    ))
+    await client.post(
+        "/telemetry",
+        json=_base_event(
+            vehicle_id="v-11",
+            speed_mps=9.0,
+            status="idle",
+            battery_pct=50.0,
+            error_codes=[],
+        ),
+    )
 
     # 3. error_codes
-    await client.post("/telemetry", json=_base_event(
-        vehicle_id="v-12",
-        error_codes=["E01"],
-        battery_pct=50.0,
-        speed_mps=2.0,
-        status="idle",
-    ))
+    await client.post(
+        "/telemetry",
+        json=_base_event(
+            vehicle_id="v-12",
+            error_codes=["E01"],
+            battery_pct=50.0,
+            speed_mps=2.0,
+            status="idle",
+        ),
+    )
 
     # 4. fault_status
     await client.post("/telemetry", json=_fault_event("v-13"))
@@ -200,6 +227,7 @@ async def test_all_four_anomaly_conditions_surface(client: AsyncClient):
 # ---------------------------------------------------------------------------
 # No-filter returns all
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_anomalies_no_filters_returns_all(client: AsyncClient):
