@@ -1,1 +1,8 @@
 .planning/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+backend/.venv/
+backend/.env
