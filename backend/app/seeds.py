@@ -23,3 +23,17 @@ async def seed_vehicles(session: AsyncSession) -> None:
     ])
     stmt = stmt.on_conflict_do_nothing(index_elements=["vehicle_id"])
     await session.execute(stmt)
+
+
+if __name__ == "__main__":
+    import asyncio
+    from app.database import engine, async_session_maker
+
+    async def main() -> None:
+        async with async_session_maker() as session:
+            async with session.begin():
+                await seed_zones(session)
+                await seed_vehicles(session)
+        await engine.dispose()
+
+    asyncio.run(main())
