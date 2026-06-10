@@ -7,19 +7,10 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import type { AnomalyRecord, VehicleRow } from "./types"
 import { ANOMALY_LABELS } from "./constants"
 import { StatusBadge } from "./StatusBadge"
 
-/** VehicleRow enriched with the latest anomaly type merged from anomalies. */
 interface EnrichedRow extends VehicleRow {
   latest_anomaly_type?: string
 }
@@ -31,21 +22,31 @@ interface VehicleTableProps {
   isError: boolean
 }
 
-/**
- * VehicleTable — sortable 50-row vehicle table.
- *
- * - Markup via shadcn Table primitives (D-12)
- * - Sorting via TanStack Table useReactTable (D-13)
- * - D-08 status colors via StatusBadge
- * - Inline latest anomaly from anomalies (grouped by vehicle_id, first = most recent)
- * - Battery < 15 renders red and bold (ANOM-02)
- * - Loading / empty / error states per UI-SPEC
- */
+const TH_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-label)',
+  fontSize: '11px',
+  fontWeight: 700,
+  letterSpacing: '0.10em',
+  textTransform: 'uppercase',
+  color: 'var(--text-secondary)',
+  padding: '0 14px',
+  height: '36px',
+  background: 'var(--bg-surface)',
+  borderBottom: '1px solid var(--border-strong)',
+  cursor: 'pointer',
+  userSelect: 'none',
+  whiteSpace: 'nowrap',
+}
+
+const TD_STYLE: React.CSSProperties = {
+  padding: '0 14px',
+  height: '36px',
+  borderBottom: '1px solid var(--border-subtle)',
+}
+
 export function VehicleTable({ vehicles, anomalies, isLoading, isError }: VehicleTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
 
-  // Memoised anomaly merge: group anomalies by vehicle_id, take first (API returns
-  // timestamp desc, so first = most recent). Avoids re-deriving on every poll cycle.
   const enrichedRows = useMemo<EnrichedRow[]>(() => {
     const latestByVehicle: Record<string, string> = {}
     for (const a of anomalies) {
@@ -65,7 +66,7 @@ export function VehicleTable({ vehicles, anomalies, isLoading, isError }: Vehicl
         accessorKey: "vehicle_id",
         header: "Vehicle",
         cell: ({ getValue }) => (
-          <span style={{ fontFamily: '"Courier New", monospace', color: "#111827" }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)' }}>
             {getValue<string>()}
           </span>
         ),
@@ -82,14 +83,15 @@ export function VehicleTable({ vehicles, anomalies, isLoading, isError }: Vehicl
           const val = getValue<number>()
           const isCritical = val < 15
           return (
-            <span
-              style={{
-                color: isCritical ? "#DC2626" : undefined,
-                fontWeight: isCritical ? 700 : undefined,
-                textAlign: "right",
-                display: "block",
-              }}
-            >
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              color: isCritical ? 'var(--status-fault)' : 'var(--text-primary)',
+              fontWeight: isCritical ? 600 : 400,
+              display: 'block',
+              textAlign: 'right',
+              ...(isCritical ? { animation: 'fault-pulse 2s ease-in-out infinite' } : {}),
+            }}>
               {val.toFixed(1)}%
             </span>
           )
@@ -101,10 +103,17 @@ export function VehicleTable({ vehicles, anomalies, isLoading, isError }: Vehicl
         cell: ({ getValue }) => {
           const raw = getValue<string | undefined>()
           if (!raw) {
-            return <span style={{ color: "#D1D5DB" }}>—</span>
+            return <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>—</span>
           }
+          const isFault = raw === 'fault_status'
           return (
-            <span style={{ color: "#374151" }}>
+            <span style={{
+              fontFamily: 'var(--font-label)',
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              color: isFault ? 'var(--status-fault)' : 'var(--text-secondary)',
+            }}>
               {ANOMALY_LABELS[raw] ?? raw}
             </span>
           )
@@ -123,57 +132,59 @@ export function VehicleTable({ vehicles, anomalies, isLoading, isError }: Vehicl
     onSortingChange: setSorting,
   })
 
-  // ── Error banner (shown above table; stale data keeps rendering if present) ──
   const errorBanner = isError ? (
-    <div
-      role="alert"
-      style={{
-        backgroundColor: "#FEF2F2",
-        color: "#DC2626",
-        padding: "8px 16px",
-        borderRadius: "4px",
-        marginBottom: "8px",
-        fontSize: "14px",
-      }}
-    >
-      Unable to reach backend. Retrying automatically.
+    <div role="alert" style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      background: 'rgba(255,61,61,0.08)',
+      borderLeft: '2px solid var(--status-fault)',
+      color: 'var(--status-fault)',
+      padding: '8px 14px',
+      fontSize: '11px',
+      fontFamily: 'var(--font-label)',
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+    }}>
+      <span style={{ animation: 'fault-pulse 1.5s ease-in-out infinite' }}>⚠</span>
+      Backend unreachable — retrying
     </div>
   ) : null
 
-  // ── Loading state: 10 skeleton rows ──
+  const headerRow = (
+    <thead>
+      <tr>
+        {['Vehicle', 'Status', 'Battery %', 'Latest Anomaly'].map((label, i) => (
+          <th key={i} style={{
+            ...TH_STYLE,
+            textAlign: i === 2 ? 'right' : 'left',
+          }}>
+            {label}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  )
+
+  // ── Loading skeleton ──
   if (isLoading && vehicles.length === 0) {
     return (
       <>
         {errorBanner}
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">Vehicle</TableHead>
-              <TableHead scope="col">Status</TableHead>
-              <TableHead scope="col">Battery %</TableHead>
-              <TableHead scope="col">Latest Anomaly</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 10 }).map((_, i) => (
-              <TableRow key={i} style={{ height: "40px" }}>
-                {[120, 80, 60, 100].map((w, ci) => (
-                  <TableCell key={ci}>
-                    <div
-                      style={{
-                        height: "16px",
-                        width: `${w}px`,
-                        backgroundColor: "#E5E7EB",
-                        borderRadius: "4px",
-                        animation: "pulse 1.5s ease-in-out infinite",
-                      }}
-                    />
-                  </TableCell>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          {headerRow}
+          <tbody>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <tr key={i}>
+                {[100, 72, 50, 90].map((w, ci) => (
+                  <td key={ci} style={TD_STYLE}>
+                    <div className="skeleton-bar" style={{ height: '12px', width: `${w}px` }} />
+                  </td>
                 ))}
-              </TableRow>
+              </tr>
             ))}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </>
     )
   }
@@ -183,93 +194,95 @@ export function VehicleTable({ vehicles, anomalies, isLoading, isError }: Vehicl
     return (
       <>
         {errorBanner}
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">Vehicle</TableHead>
-              <TableHead scope="col">Status</TableHead>
-              <TableHead scope="col">Battery %</TableHead>
-              <TableHead scope="col">Latest Anomaly</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell
-                colSpan={4}
-                style={{ textAlign: "center", color: "#6B7280", padding: "24px" }}
-              >
-                No vehicles reporting. Waiting for telemetry data.
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          {headerRow}
+          <tbody>
+            <tr>
+              <td colSpan={4} style={{
+                ...TD_STYLE,
+                textAlign: 'center',
+                color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-label)',
+                fontSize: '12px',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                padding: '40px 14px',
+              }}>
+                No vehicles reporting — awaiting telemetry
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </>
     )
   }
 
-  // ── Populated state (also shown during error if stale data is available) ──
+  // ── Populated ──
   return (
     <>
       {errorBanner}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {table.getHeaderGroups().map((headerGroup) =>
-              headerGroup.headers.map((header) => {
-                const isSorted = header.column.getIsSorted()
-                const ariaSort =
-                  isSorted === "asc"
-                    ? "ascending"
-                    : isSorted === "desc"
-                    ? "descending"
-                    : "none"
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            {table.getHeaderGroups().flatMap((hg) =>
+              hg.headers.map((header) => {
+                const sorted = header.column.getIsSorted()
+                const ariaSort = sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'
+                const isRight = header.id === 'current_battery'
                 return (
-                  <TableHead
+                  <th
                     key={header.id}
                     scope="col"
                     aria-sort={ariaSort}
                     onClick={header.column.getToggleSortingHandler()}
-                    style={{
-                      cursor: "pointer",
-                      userSelect: "none",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
+                    style={{ ...TH_STYLE, textAlign: isRight ? 'right' : 'left' }}
                   >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {isSorted === "asc" && (
-                      <span style={{ color: "#2563EB", marginLeft: "4px" }}>▲</span>
-                    )}
-                    {isSorted === "desc" && (
-                      <span style={{ color: "#2563EB", marginLeft: "4px" }}>▼</span>
-                    )}
-                  </TableHead>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {sorted && (
+                        <span style={{ color: 'var(--text-accent)', fontSize: '9px' }}>
+                          {sorted === 'asc' ? '▲' : '▼'}
+                        </span>
+                      )}
+                    </span>
+                  </th>
                 )
               })
             )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow
-              key={row.id}
-              style={{
-                height: "40px",
-                borderBottom: "1px solid #F3F4F6",
-              }}
-              className="hover:bg-[#F9FAFB]"
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </tr>
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row, idx) => {
+            const isFaultRow = row.original.current_status === 'fault'
+            return (
+              <tr
+                key={row.id}
+                style={{
+                  background: isFaultRow
+                    ? 'var(--bg-fault-row)'
+                    : idx % 2 === 0 ? 'var(--bg-base)' : 'var(--bg-surface)',
+                  borderLeft: isFaultRow ? '2px solid var(--status-fault)' : '2px solid transparent',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLTableRowElement).style.background = 'var(--bg-hover)'
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLTableRowElement).style.background = isFaultRow
+                    ? 'var(--bg-fault-row)'
+                    : idx % 2 === 0 ? 'var(--bg-base)' : 'var(--bg-surface)'
+                }}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} style={TD_STYLE}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </>
   )
 }

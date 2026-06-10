@@ -1,27 +1,40 @@
-import { Badge } from "@/components/ui/badge"
 import { STATUS_STYLES } from "./constants"
 
-/**
- * StatusBadge wraps the shadcn Badge primitive, applying the locked D-08
- * traffic-light colors (STATUS_STYLES) via inline styles.
- *
- * Accessibility: aria-label={status} ensures screen readers read the status
- * value, not just the color (UI-SPEC Accessibility Baseline).
- */
 export function StatusBadge({ status }: { status: string }) {
-  // Fall back to idle styling for unknown statuses — no crash.
   const styles = STATUS_STYLES[status] ?? STATUS_STYLES.idle
+  const isFault = status === 'fault'
 
   return (
-    <Badge
-      variant="secondary"
+    <span
       aria-label={status}
       style={{
-        backgroundColor: styles.bg,
-        color: styles.text,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
+        padding: '2px 8px',
+        background: styles.bg,
+        borderRadius: '2px',
+        border: isFault ? `1px solid rgba(255,61,61,0.30)` : '1px solid transparent',
       }}
     >
-      {status}
-    </Badge>
+      <span style={{
+        width: '5px',
+        height: '5px',
+        borderRadius: '50%',
+        background: styles.text,
+        flexShrink: 0,
+        ...(isFault ? { animation: 'fault-pulse 1.5s ease-in-out infinite' } : {}),
+      }} />
+      <span style={{
+        fontFamily: 'var(--font-label)',
+        fontSize: '11px',
+        fontWeight: 600,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        color: styles.text,
+      }}>
+        {status}
+      </span>
+    </span>
   )
 }

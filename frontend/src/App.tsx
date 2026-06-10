@@ -7,33 +7,32 @@ function App() {
   const { vehicles, anomalies, zones, fleetState } = useDashboardData()
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#FFFFFF',
-      }}
-    >
-      {/* Full-width header (D-02) */}
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg-base)',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: 'var(--font-ui)',
+    }}>
       <Header
         fleetState={fleetState.data ?? []}
         dataUpdatedAt={vehicles.dataUpdatedAt}
       />
 
-      {/* Two-column body: 70% vehicles left, 30% zones right (D-01) */}
-      <div
-        style={{
-          display: 'flex',
-          flex: 1,
-          gap: '32px',
-          padding: '24px',
-          alignItems: 'flex-start',
-        }}
-      >
+      <div style={{
+        display: 'flex',
+        flex: 1,
+        gap: 0,
+        alignItems: 'flex-start',
+        overflow: 'hidden',
+      }}>
         {/* Left column: vehicle table ~70% */}
-        <div style={{ flex: '0 0 70%' }}>
+        <div style={{
+          flex: '0 0 70%',
+          borderRight: '1px solid var(--border-subtle)',
+          minHeight: 'calc(100vh - 48px)',
+          overflowX: 'auto',
+        }}>
           <VehicleTable
             vehicles={vehicles.data ?? []}
             anomalies={anomalies.data ?? []}
@@ -43,7 +42,7 @@ function App() {
         </div>
 
         {/* Right column: zone list ~30% */}
-        <div style={{ flex: '0 0 calc(30% - 32px)' }}>
+        <div style={{ flex: '0 0 30%', minHeight: 'calc(100vh - 48px)' }}>
           <ZoneList
             zones={zones.data ?? []}
             isLoading={zones.isLoading}

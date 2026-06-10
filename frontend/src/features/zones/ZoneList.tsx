@@ -8,131 +8,164 @@ interface ZoneListProps {
 }
 
 export function ZoneList({ zones, isLoading, isError }: ZoneListProps) {
-  // Sort by entry_count descending — busiest first (D-07)
   const sortedZones = useMemo(
     () => [...zones].sort((a, b) => b.entry_count - a.entry_count),
     [zones]
   )
 
-  return (
-    <div
-      style={{
-        background: '#F9FAFB',
-        padding: '24px',
-        overflowY: 'auto',
-        maxHeight: 'calc(100vh - 56px)',
-      }}
-    >
-      {/* Section heading */}
-      <h2
-        style={{
-          fontSize: '16px',
-          fontWeight: 600,
-          lineHeight: 1.3,
-          color: '#111827',
-          margin: 0,
-          marginBottom: '12px',
-        }}
-      >
-        Zone Entry Counts
-      </h2>
+  const maxCount = sortedZones[0]?.entry_count ?? 1
 
-      {/* Error state */}
+  return (
+    <div style={{
+      background: 'var(--bg-surface)',
+      height: '100%',
+      minHeight: 'calc(100vh - 48px)',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Section header */}
+      <div style={{
+        height: '36px',
+        display: 'flex',
+        alignItems: 'center',
+        paddingLeft: '16px',
+        paddingRight: '16px',
+        borderBottom: '1px solid var(--border-strong)',
+        background: 'var(--bg-surface)',
+        flexShrink: 0,
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-label)',
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.10em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+        }}>
+          Zone Entry Counts
+        </span>
+      </div>
+
+      {/* Error */}
       {isError && (
-        <div
-          role="alert"
-          style={{
-            background: '#FEE2E2',
-            color: '#DC2626',
-            borderRadius: '4px',
-            padding: '8px 12px',
-            fontSize: '14px',
-            marginBottom: '12px',
-          }}
-        >
-          Unable to reach backend. Retrying automatically.
+        <div role="alert" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'rgba(255,61,61,0.08)',
+          borderLeft: '2px solid var(--status-fault)',
+          color: 'var(--status-fault)',
+          padding: '8px 16px',
+          fontSize: '11px',
+          fontFamily: 'var(--font-label)',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          flexShrink: 0,
+        }}>
+          ⚠ Backend unreachable
         </div>
       )}
 
-      {/* Loading state: 5 skeleton rows */}
+      {/* Skeleton */}
       {isLoading && zones.length === 0 && (
-        <div>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              style={{
-                height: '36px',
-                borderBottom: '1px solid #F3F4F6',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <div
-                style={{
-                  height: '16px',
-                  width: '60%',
-                  background: '#E5E7EB',
-                  borderRadius: '4px',
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                }}
-              />
-              <div
-                style={{
-                  height: '16px',
-                  width: '20%',
-                  background: '#E5E7EB',
-                  borderRadius: '4px',
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                }}
-              />
+        <div style={{ padding: '8px 0' }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 16px',
+              gap: '12px',
+            }}>
+              <div className="skeleton-bar" style={{ height: '10px', width: `${50 + Math.random() * 30}%` }} />
+              <div className="skeleton-bar" style={{ height: '10px', width: '24px' }} />
             </div>
           ))}
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty */}
       {!isLoading && !isError && zones.length === 0 && (
-        <p
-          style={{
-            fontSize: '14px',
-            color: '#6B7280',
-            textAlign: 'center',
-            marginTop: '24px',
-          }}
-        >
-          No zone entries recorded yet.
-        </p>
+        <div style={{
+          padding: '40px 16px',
+          textAlign: 'center',
+          fontFamily: 'var(--font-label)',
+          fontSize: '11px',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+        }}>
+          No zone entries recorded
+        </div>
       )}
 
-      {/* Populated: all zones sorted by count desc */}
+      {/* Zone rows */}
       {sortedZones.length > 0 && (
-        <div>
-          {sortedZones.map((zone) => (
-            <div
-              key={zone.zone_id}
-              style={{
-                height: '36px',
-                borderBottom: '1px solid #F3F4F6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span style={{ fontSize: '14px', color: '#374151' }}>
-                {zone.zone_id}
-              </span>
-              <span
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {sortedZones.map((zone, idx) => {
+            const barPct = maxCount > 0 ? (zone.entry_count / maxCount) * 100 : 0
+            const isActive = zone.entry_count > 0
+            return (
+              <div
+                key={zone.zone_id}
                 style={{
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#111827',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 16px',
+                  height: '34px',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)',
+                  gap: '10px',
                 }}
               >
-                {zone.entry_count}
-              </span>
-            </div>
-          ))}
+                {/* Zone name */}
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  flex: '0 0 auto',
+                  minWidth: '120px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {zone.zone_id}
+                </span>
+
+                {/* Bar track */}
+                <div style={{
+                  flex: 1,
+                  height: '4px',
+                  background: 'var(--border-subtle)',
+                  borderRadius: '2px',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${barPct}%`,
+                    background: isActive
+                      ? `linear-gradient(90deg, var(--text-accent), rgba(240,164,22,0.6))`
+                      : 'transparent',
+                    borderRadius: '2px',
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+
+                {/* Count */}
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '12px',
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? 'var(--text-accent)' : 'var(--text-dim)',
+                  flex: '0 0 auto',
+                  minWidth: '20px',
+                  textAlign: 'right',
+                }}>
+                  {zone.entry_count}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
