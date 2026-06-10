@@ -1,6 +1,8 @@
 # backend/app/telemetry/service.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.exc import NoResultFound
+from fastapi import HTTPException
 from app.telemetry.schemas import TelemetryEventCreate, TelemetryEventResponse
 from app.telemetry.models import TelemetryEvent
 from app.anomalies.models import Anomaly
@@ -51,6 +53,19 @@ def _anomaly_type(event: TelemetryEventCreate) -> str:
     return "unknown"
 
 
+async def _assert_vehicle_exists(session: AsyncSession, vehicle_id: str) -> None:
+    """Raise HTTP 404 if vehicle_id does not exist in the vehicles table.
+
+    Called for non-fault events before any INSERT to prevent orphaned telemetry
+    and anomaly rows referencing a non-existent vehicle (CR-01).
+    """
+    result = await session.execute(
+        select(Vehicle.vehicle_id).where(Vehicle.vehicle_id == vehicle_id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle '{vehicle_id}' not found")
+
+
 async def ingest_telemetry(
     session: AsyncSession, event: TelemetryEventCreate
 ) -> TelemetryEventResponse:
@@ -74,9 +89,12 @@ async def ingest_telemetry(
         #    before this transaction's UPDATE changes it. This is the SELECT FOR UPDATE
         #    that serializes concurrent fault events for the same vehicle (FAULT-02).
         #    Different vehicles lock different rows — no table-level serialization.
+        #    For non-fault events: assert vehicle exists to prevent orphaned rows (CR-01).
         pre_fault_status: str | None = None
         if event.status == "fault":
             pre_fault_status = await _lock_vehicle_and_read_status(session, event.vehicle_id)
+        else:
+            await _assert_vehicle_exists(session, event.vehicle_id)
 
         # 2. Insert telemetry event
         telemetry_row = TelemetryEvent(
@@ -153,7 +171,10 @@ async def _lock_vehicle_and_read_status(session: AsyncSession, vehicle_id: str) 
         .where(Vehicle.vehicle_id == vehicle_id)
         .with_for_update()
     )
-    vehicle = result.scalar_one()  # raises NoResultFound if vehicle missing — fail fast
+    try:
+        vehicle = result.scalar_one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"Vehicle '{vehicle_id}' not found")
     return vehicle.current_status
 
 
